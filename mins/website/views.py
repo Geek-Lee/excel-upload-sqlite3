@@ -14,109 +14,102 @@ import uuid
 
 
 def df_to_sql_T_1(filefullpath, sheet, row_name):#路径名，sheet为sheet数，row_name为指定行为columns
-    df = pd.read_excel(filefullpath, sheetname=sheet)#读取存在文件夹中的excel
-    df = df.dropna(how="all")
-    df = df.dropna(axis=1, how="all")
-    df = df.T
-    df.columns = df.loc[row_name]
-    df = df.drop(row_name, axis=0, inplace=False)
-    df.drop_duplicates(subset=['★机构全名'], inplace=True)
+    #读取存在文件夹中的excel
+    excel_df = pd.read_excel(filefullpath, sheetname=sheet)
+    excel_df = excel_df.dropna(how="all")
+    excel_df = excel_df.dropna(axis=1, how="all")
+    excel_df = excel_df.T
+    excel_df.columns = excel_df.loc[row_name]
+    excel_df = excel_df.drop(row_name, axis=0, inplace=False)
+    excel_df.index = range(len(excel_df))
+    excel_df.drop_duplicates(subset=['★机构全名'], inplace=True)
+    print("excel_df")
+    print(excel_df)
+    print("excel_df")
 
-    con = sqlite3.connect(r"C:\Users\Administrator\Desktop\excel-upload-sqlite3\mins\db.sqlite3")
-    sql = "SELECT upload_company_form1.'★机构全名' FROM upload_company_form1"#!!!注意这个没有表格会出错
-    data = pd.read_sql(sql, con)
-    fund_name_list = data['★机构全名'].tolist()
+    #数据库的读取
+    con = sqlite3.connect(r"C:\Users\K\Desktop\excel-upload-sqlite3\mins\db.sqlite3")
+    sql = "SELECT * FROM org_info"#!!!注意这个没有表格会出错
+    sql_df = pd.read_sql(sql, con)
+    fund_name_list = sql_df['org_full_name'].tolist()
+    print("fund_name_list")
+    print(fund_name_list)
+    sql_number = len(fund_name_list)
+    print("sql_df")
+    print(sql_df)
+    print("sql_df")
 
-    for name in df['★机构全名'].unique:
-        df.loc['★机构全名' == name, 'UUID'] = str(uuid.uuid3(uuid.NAMESPACE_DNS, name))
-    for name in df['★机构全名'].unique():
+    #依次对数据库中的每一行添加一列id
+    org_id = 0
+    for org_full_name in sql_df['org_full_name'].unique():
+        org_id = org_id+1
+        with con:
+            cur = con.cursor()
+            cur.execute("""UPDATE org_info SET org_id=? WHERE org_full_name=?""", (org_id, org_full_name))
+
+
+    #对excel进行读取
+    #excel_data = pd.read_excel(filefullpath, sheetname=sheet)
+    excel_name_list = excel_df['★机构全名'].tolist()
+    print("excel_name_list")
+    print(excel_name_list)
+    for name in excel_name_list:
         if name in fund_name_list:
-            df.to_sql("upload_company_form1", con, if_exists="replace", index=False)
+            #提取数据库中的org_full_name为name的id
+            con = sqlite3.connect(r"C:\Users\K\Desktop\excel-upload-sqlite3\mins\db.sqlite3")
+            sql = "SELECT * FROM org_info"
+            sql_df = pd.read_sql(sql, con)
+            name_dataframe =sql_df[sql_df["org_full_name"] == name]
+            org_id = name_dataframe.loc[name_dataframe.last_valid_index(), 'org_id']
+
+            #把excel的一行变成dataframe，并且加上id，并上传到数据库
+            index = excel_df[excel_df["★机构全名"] == name]
+            commit_data = pd.DataFrame(data=excel_df, index=[index.last_valid_index()], columns=sql_df.columns)
+            commit_data.loc[index.last_valid_index(), "org_id"] = id
+
+            #把一行表格dataframe提取其中的值
+            org_name = str(commit_data.loc[index.last_valid_index(), "★机构简称"])
+            org_full_name = str(commit_data.loc[index.last_valid_index(), "★机构全名"])
+            reg_code = str(commit_data.loc[index.last_valid_index(), "★登记编号"])
+            reg_time = str(commit_data.loc[index.last_valid_index(), "★登记时间"])
+            found_date = str(commit_data.loc[index.last_valid_index(), "★机构成立日期"])
+            reg_capital = str(commit_data.loc[index.last_valid_index(), "★注册资本"])
+            real_capital = str(commit_data.loc[index.last_valid_index(), "★实缴资本"])
+            region = str(commit_data.loc[index.last_valid_index(), "★地区"])
+            profile = str(commit_data.loc[index.last_valid_index(), "★公司简介"])
+            address = str(commit_data.loc[index.last_valid_index(), "★联系地址"])
+            team = str(commit_data.loc[index.last_valid_index(), "★投研团队"])
+            fund_num = str(commit_data.loc[index.last_valid_index(), "★已发行产品数量"])
+            is_qualification = str(commit_data.loc[index.last_valid_index(), "是否具备投顾资格"])
+            prize = str(commit_data.loc[index.last_valid_index(), "所获荣誉"])
+            team_scale = str(commit_data.loc[index.last_valid_index(), "投研人员规模"])
+            investment_idea = str(commit_data.loc[index.last_valid_index(), "投资理念"])
+            master_strategy = str(commit_data.loc[index.last_valid_index(), "主要策略"])
+            remark = str(commit_data.loc[index.last_valid_index(), "备注"])
+            asset_mgt_scale = str(commit_data.loc[index.last_valid_index(), "★截至上月末管理产品规模（亿）"])
+            linkman = str(commit_data.loc[index.last_valid_index(), "★联系人"])
+            linkman_duty = str(commit_data.loc[index.last_valid_index(), "联系人职位"])
+            linkman_phone = str(commit_data.loc[index.last_valid_index(), "★联系人电话"])
+            linkman_email = str(commit_data.loc[index.last_valid_index(), "联系人邮箱"])
+            with con:
+                cur = con.cursor()
+                sql = """UPDATE org_info SET org_name=?, org_full_name=?, reg_code=?, reg_time=?, found_date=?, \
+                reg_capital=?, real_capital=?, region=?,profile=?, address=?, team=?, fund_num=?, is_qualification=?, \
+                prize=?, team_scale=?, investment_idea=?, master_strategy=?, remark=?, asset_mgt_scale=?, linkman=?, \
+                linkman_duty=?, linkman_phone=?, linkman_email=? WHERE org_id=?"""
+                l = (org_name, org_full_name, reg_code, reg_time, found_date, reg_capital, real_capital, region, profile,\
+                     address, team, fund_num, is_qualification, prize, team_scale, investment_idea, master_strategy, remark,\
+                     asset_mgt_scale, linkman, linkman_duty, linkman_phone, linkman_email, org_id)
+                cur.execute(sql, l)
             print("if")
         else:
-            df.to_sql("upload_company_form1", con, if_exists="append", index=False)
+            sql_number = sql_number + 1
+            print(sql_number)
+            index = excel_df[excel_df["★机构全名"] == name]
+            commit_data = pd.DataFrame(data=excel_df, index=[index.last_valid_index()], columns=sql_df.columns)
+            commit_data.loc[index.last_valid_index(), "org_id"] = str(sql_number)
+            commit_data.to_sql("org_info", con, if_exists="append", index=False)
             print("else")
-    print("to_sql")
-def df_to_sql_T_2(filefullpath, sheet, row_name):#路径名，sheet为sheet数，row_name为指定行为columns
-    df = pd.read_excel(filefullpath, sheetname=sheet)#读取存在文件夹中的excel
-    df = df.dropna(how="all")
-    df = df.dropna(axis=1, how="all")
-    df = df.T
-    df.columns = df.loc[row_name]
-    df = df.drop(row_name, axis=0, inplace=False)
-    df.drop_duplicates(subset=['★基金全称'], inplace=True)
-
-    con = sqlite3.connect(r"C:\Users\Administrator\Desktop\excel-upload-sqlite3\mins\db.sqlite3")
-    sql = "SELECT upload_company_form2.'★基金全称' FROM upload_company_form2"#!!!注意这个没有表格会出错
-    data = pd.read_sql(sql, con)
-    fund_name_list = data['★基金全称'].tolist()
-
-    for name in df['★基金全称'].unique:
-        df.loc['★基金全称' == name, 'UUID'] = str(uuid.uuid3(uuid.NAMESPACE_DNS, name))
-    for name in df['★基金全称'].unique():
-        if name in fund_name_list:
-            df.to_sql("upload_company_form2", con, if_exists="replace", index=False)
-            print("if")
-        else:
-            df.to_sql("upload_company_form2", con, if_exists="append", index=False)
-            print("else")
-    print("to_sql")
-def df_to_sql_T_3(filefullpath, sheet, row_name):#路径名，sheet为sheet数，row_name为指定行为columns
-    df = pd.read_excel(filefullpath, sheetname=sheet)#读取存在文件夹中的excel
-    df = df.dropna(how="all")
-    df = df.dropna(axis=1, how="all")
-    df = df.T
-    df.columns = df.loc[row_name]
-    df = df.drop(row_name, axis=0, inplace=False)
-    df.drop_duplicates(subset=['★姓名'], inplace=True)
-
-    con = sqlite3.connect(r"C:\Users\Administrator\Desktop\excel-upload-sqlite3\mins\db.sqlite3")
-    sql = "SELECT upload_company_form3.'★姓名' FROM upload_company_form3"#!!!注意这个没有表格会出错
-    data = pd.read_sql(sql, con)
-    fund_name_list = data['★姓名'].tolist()
-
-    for name in df['★姓名'].unique:
-        df.loc['★姓名' == name, 'UUID'] = str(uuid.uuid3(uuid.NAMESPACE_DNS, name))
-    for name in df['★姓名'].unique():
-        if name in fund_name_list:
-            df.to_sql("upload_company_form3", con, if_exists="replace", index=False)
-            print("if")
-        else:
-            df.to_sql("upload_company_form3", con, if_exists="append", index=False)
-            print("else")
-    print("to_sql")
-def df_to_sql_4(filefullpath, sheet, row_name):#路径名，sheet为sheet数，row_name为指定行为columns
-    df = pd.read_excel(filefullpath, sheetname=sheet)#读取存在文件夹中的excel
-    df = df.dropna(how="all")
-    df = df.dropna(axis=1, how="all")
-    df = df.T
-    df.drop_duplicates(subset=['基金简称'], inplace=True)
-
-    con = sqlite3.connect(r"C:\Users\Administrator\Desktop\excel-upload-sqlite3\mins\db.sqlite3")
-    sql = "SELECT upload_company_form4.'★机构全名' FROM upload_company_form4"#!!!注意这个没有表格会出错
-    data = pd.read_sql(sql, con)
-    fund_name_list = data['基金简称'].tolist()
-
-    for name in df['基金简称'].unique:
-        df.loc['基金简称' == name, 'UUID'] = str(uuid.uuid3(uuid.NAMESPACE_DNS, name))
-    for name in df['基金简称'].unique():
-        if name in fund_name_list:
-            df.to_sql("upload_company_form4", con, if_exists="replace", index=False)
-            print("if")
-        else:
-            df.to_sql("upload_company_form4", con, if_exists="append", index=False)
-            print("else")
-    print("to_sql")
-
-
-# def df_to_sql(filefullpath, sheet):
-#     df = pd.read_excel(filefullpath, sheetname=sheet)
-#     df = df.dropna(how="all")
-#     df = df.dropna(axis=1, how="all")
-#     print(df)
-#     con = sqlite3.connect(r"C:\Users\Administrator\Desktop\excel-upload-sqlite3\mins\db.sqlite3")
-#     df.to_sql(str(sheet), con, if_exists="append")
-#     print("tosql!")
 
 
 def listing(request):
@@ -132,33 +125,24 @@ def listing(request):
             profile.user_upload_file = user_upload_file
             profile.save()
             file_name = request.FILES.get('user_upload_file').name
-            print(request.FILES.get('user_upload_file').name)
-            print(type(request.FILES.get('user_upload_file').name))
-            print(type(request.FILES))
-            path = "C:\\Users\\Administrator\\Desktop\\excel-upload-sqlite3\\mins\\upload\\upload\\"
+            path = "C:\\Users\\K\\Desktop\\excel-upload-sqlite3\\mins\\upload\\upload\\"
+            #C:\Users\K\Desktop\excel - upload - sqlite3\excel - upload - sqlite3\mins\upload\upload\华泰大赛参赛私募基金数据填报模板.xlsx
             filefullpath = path + file_name
-            print(filefullpath)
+            #print(filefullpath)
             if user_upload_file:
                 b = xlrd.open_workbook(filefullpath)
                 #count = len(b.sheets())#不需要，sheet数都是固定的
-                for sheet in range(1,5):
+                for sheet in range(1, 5):
                     if sheet == 1:
                         row_name = "公司资料简介"
                         print(1)
                         df_to_sql_T_1(filefullpath, sheet, row_name)
                     if sheet == 2:
-                        row_name = "基金简介"
-                        print(2)
-                        #df_to_sql_T(filefullpath, sheet)
-                        df_to_sql_T_2(filefullpath, sheet, row_name)
+                        pass
                     if sheet == 3:
-                        row_name = "人员简介"
-                        print(3)
-                        #df_to_sql_T(filefullpath, sheet)
-                        df_to_sql_T_3(filefullpath, sheet, row_name)
+                        pass
                     if sheet == 4:
-                        print(4)
-                        df_to_sql_4(filefullpath, sheet)
+                        pass
             return HttpResponse('upload ok!')
         else:
             return redirect(to='login')
