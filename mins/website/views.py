@@ -33,9 +33,10 @@ def df_to_sql_T_1(filefullpath, sheet, row_name):#路径名，sheet为sheet数�
 
 
     #依次对数据库中的每一行添加一列id
-    org_id = 0
+    org_id_number = 0
     for org_full_name in sql_df['org_full_name'].unique():
-        org_id = org_id+1
+        org_id_number = org_id_number+1
+        org_id = 'O'+'0'*(5-len(str(org_id_number)))+str(org_id_number)
         with con:
             cur = con.cursor()
             cur.execute("""UPDATE org_info SET org_id=? WHERE org_full_name=?""", (org_id, org_full_name))
@@ -101,14 +102,13 @@ def df_to_sql_T_1(filefullpath, sheet, row_name):#路径名，sheet为sheet数�
             print("if")
         else:
             sql_number = sql_number + 1
-            print(sql_number)
             commit_data = excel_df[excel_df["★机构全名"] == name]
             commit_data.columns = ["org_name", "org_full_name", "reg_code", "reg_time", "found_date", "reg_capital",
                                    "real_capital", "region", "profile", "address", "team", "fund_num",
                                    "is_qualification", "prize", "team_scale", "investment_idea", "master_strategy",
                                    "remark", "asset_mgt_scale", "linkman", "linkman_duty", "linkman_phone",
                                    "linkman_email"]
-            commit_data.loc[:, "org_id"] = str(sql_number)
+            commit_data.loc[:, "org_id"] = 'O'+'0'*(5-len(str(sql_number)))+str(sql_number)
             commit_data.to_sql("org_info", con, if_exists="append", index=False)
             print("else")
 
@@ -136,7 +136,6 @@ def listing(request):
                 for sheet in range(1, 5):
                     if sheet == 1:
                         row_name = "公司资料简介"
-                        print(1)
                         df_to_sql_T_1(filefullpath, sheet, row_name)
                     if sheet == 2:
                         pass
