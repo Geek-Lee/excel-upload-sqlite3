@@ -320,79 +320,81 @@ def df_to_sql_T_3(filefullpath, sheet, row_name):#路径名，sheet为sheet数�
             commit_data.to_sql("manager_info", con, if_exists="append", index=False)
             print("else")
 
-def df_to_sql_4(filefullpath, sheet, row_name):#路径名，sheet为sheet数，row_name为指定行为columns
-    #读取存在文件夹中的excel
+def df_to_sql_4(filefullpath, sheet, row_name):
+    #读取处理文件夹中的excel
     excel_df = pd.read_excel(filefullpath, sheetname=sheet)
     excel_df = excel_df.dropna(how="all")
-    excel_df = excel_df.dropna(axis=1, how="all")
-    #excel_df.columns = excel_df.loc[row_name]#把【基金简称】的这一行变成columns这一列
-    #excel_df = excel_df.drop(row_name, axis=0, inplace=False)#去除【基金简称】这一行
+    #excel_df = excel_df.dropna(axis=1, how="all")
+    excel_df[row_name] = excel_df[row_name].ffill()
     excel_df.index = range(len(excel_df))
-    excel_df.drop_duplicates(subset=['基金简称'], inplace=True)
+    print(excel_df)
 
     #数据库的读取
     con = sqlite3.connect(r"C:\Users\K\Desktop\excel-upload-sqlite3\mins\db.sqlite3")
-    sql = "SELECT * FROM fund_nav_data"#!!!注意sql中没有表格会出错
+    sql = "SELECT * FROM fund_nav_data"
     sql_df = pd.read_sql(sql, con)
-    user_list = sql_df['fund_name'].tolist()#list
-    sql_number = len(user_list)
+    name_list = sql_df['fund_name'].tolist()
+    date_list = sql_df['statistic_date'].tolist()
+    print("name_list")
+    #print(type(name_list[0]))
+    print(name_list)
+    print("date_list")
+    #print(type(date_list[0]))
+    print(date_list)
 
-
-    #依次对数据库中的每一行添加一列id
-    fund_id_number = 0
+    #从fund_info数据表中提取出fund_id，加入fund_nav_data数据表中的fund_id
     for fund_name in sql_df['fund_name'].unique():
-        fund_id_number = fund_id_number+1
-        fund_id = 'F'+'0'*(6-len(str(fund_id_number)))+str(fund_id_number)
+        sql = "SELECT * FROM fund_info"
+        fund_info_sql_df = pd.read_sql(sql, con)
+        fund_id = fund_info_sql_df.loc[fund_info_sql_df.fund_name == fund_name, 'fund_id'].values[0]
         with con:
             cur = con.cursor()
             cur.execute("""UPDATE fund_nav_data SET fund_id=? WHERE fund_name=?""", (fund_id, fund_name))
 
+    #对excel_df进行读取
+    excel_name_list = excel_df['基金简称'].tolist()
+    excel_name_list = list(set(excel_name_list))
+    print("excel_name_list")
+    #print(type(excel_name_list[0]))
+    print(excel_name_list)
 
-    #对excel进行读取
-    #excel_data = pd.read_excel(filefullpath, sheetname=sheet)
-    excel_name_list = excel_df['基金简称'].tolist()#list
     for name in excel_name_list:
-        if name in user_list:
-            #提取数据库中的user_name为name的id
-            con = sqlite3.connect(r"C:\Users\K\Desktop\excel-upload-sqlite3\mins\db.sqlite3")
-            sql = "SELECT * FROM fund_nav_data"
-            sql_df = pd.read_sql(sql, con)
-            name_dataframe =sql_df[sql_df["fund_name"] == name]
-            user_id = name_dataframe.loc[name_dataframe.last_valid_index(), 'fund_id']#loc到最后一个有效的index和fund_id，取出值
+        statistic_date_series = excel_df.loc[excel_df['基金简称'] == name, '净值日期']
+        excel_date_list = statistic_date_series.tolist()
+        excel_date_list = [str(i) for i in excel_date_list]
+        print("excel_date_list")
+        #print(type(excel_date_list[0]))
+        print(excel_date_list)
+        for date in excel_date_list:
+            if name in name_list and date in date_list:
+                commit_data = excel_df[excel_df['基金简称'] == name]
+                print(commit_data.columns)
+                commit_data.columns = ["fund_name", "statistic_date", "nav", "added_nav", "total_share", "total_asset", "total_nav", "is_split", "is_open_date", "split_ratio", "after_tax_bonus"]
+                commit_data["fund_id"] = str(fund_id)
 
-            #把excel的一行变成dataframe，并且加上id，并上传到数据库
-            commit_data = excel_df[excel_df["基金简称"] == name]
-            commit_data.columns = ["fund_name", "statistic_date", "nav", "added_nav", "total_share", "total_asset",
-                                   "total_nav", "is_split", "is_open_date", "split_ratio", "after_tax_bonus"]
-            commit_data["fund_id"] = str(fund_id)#不需要
+                fund_name = name
+                statistic_date = str(date)
+                nav = str(commit_data.loc[commit_data.statistic_date == date, 'nav'].values[0])
+                added_nav = str(commit_data.loc[commit_data.statistic_date == date, 'added_nav'].values[0])
+                total_share = str(commit_data.loc[commit_data.statistic_date == date, 'total_share'].values[0])
+                total_asset = str(commit_data.loc[commit_data.statistic_date == date, 'total_asset'].values[0])
+                total_nav = str(commit_data.loc[commit_data.statistic_date == date, 'total_nav'].values[0])
+                is_split = str(commit_data.loc[commit_data.statistic_date == date, 'is_split'].values[0])
+                is_open_date = str(commit_data.loc[commit_data.statistic_date == date, 'is_open_date'].values[0])
+                split_ratio = str(commit_data.loc[commit_data.statistic_date == date, 'split_ratio'].values[0])
+                after_tax_bonus = str(commit_data.loc[commit_data.statistic_date == date, 'after_tax_bonus'].values[0])
 
-            #把一行表格dataframe提取其中的值
-            fund_name = str(name)
-            statistic_date = str(commit_data.loc[commit_data.fund_name == name, 'statistic_date'].values[0])
-            nav = str(commit_data.loc[commit_data.fund_name == name, 'nav'].values[0])
-            added_nav = str(commit_data.loc[commit_data.fund_name == name, 'added_nav'].values[0])
-            total_share = str(commit_data.loc[commit_data.fund_name == name, 'total_share'].values[0])
-            total_asset = str(commit_data.loc[commit_data.fund_name == name, 'total_asset'].values[0])
-            total_nav = str(commit_data.loc[commit_data.fund_name == name, 'total_nav'].values[0])
-            is_split = str(commit_data.loc[commit_data.fund_name == name, 'is_split'].values[0])
-            is_open_date = str(commit_data.loc[commit_data.fund_name == name, 'is_open_date'].values[0])
-            split_ratio = str(commit_data.loc[commit_data.fund_name == name, 'split_ratio'].values[0])
-            after_tax_bonus = str(commit_data.loc[commit_data.fund_name == name, 'after_tax_bonus'].values[0])
-
-            with con:
-                cur = con.cursor()
-                sql = """UPDATE fund_nav_data SET fund_name=?, statistic_date=?, nav=?, added_nav=?, total_share=?, total_asset=?, total_nav=?, is_split=?, is_open_date=?, split_ratio=?, after_tax_bonus=? WHERE fund_id=?"""
-                l = (fund_name, statistic_date, nav, added_nav, total_share, total_asset, total_nav, is_split, is_open_date, split_ratio, after_tax_bonus, fund_id)
-                cur.execute(sql, l)
-            print("if")
-        else:
-            sql_number = sql_number + 1
-            commit_data = excel_df[excel_df["基金简称"] == name]
-            commit_data.columns = ["fund_name", "statistic_date", "nav", "added_nav", "total_share", "total_asset",
-                                   "total_nav", "is_split", "is_open_date", "split_ratio", "after_tax_bonus"]
-            commit_data.loc[:, "fund_id"] = 'F'+'0'*(6-len(str(sql_number)))+str(sql_number)
-            commit_data.to_sql("fund_nav_data", con, if_exists="append", index=False)
-            print("else")
+                with con:
+                    cur = con.cursor()
+                    sql = """UPDATE fund_nav_data SET nav=?, added_nav=?, total_share=?, total_asset=?, total_nav=?, is_split=?, is_open_date=?, split_ratio=?, after_tax_bonus=? WHERE fund_name=? AND statistic_date=?"""
+                    l = (nav, added_nav, total_share, total_asset, total_nav, is_split, is_open_date, split_ratio, after_tax_bonus, fund_name, statistic_date)
+                    cur.execute(sql, l)
+                print("if")
+            else:
+                commit_data = excel_df[(excel_df["基金简称"] == name)&(excel_df["净值日期"] == date)]
+                commit_data.columns = ["fund_name", "statistic_date", "nav", "added_nav", "total_share", "total_asset", "total_nav", "is_split", "is_open_date", "split_ratio", "after_tax_bonus"]
+                commit_data.to_sql("fund_nav_data", con, if_exists="append", index=False)
+                print("else")
 
 def listing(request):
     context = {}
@@ -416,17 +418,14 @@ def listing(request):
                 #count = len(b.sheets())#不需要，sheet数都是固定的
                 for sheet in range(1, 5):
                     if sheet == 1:
-                        pass
-                        #row_name = "公司资料简介"
-                        #df_to_sql_T_1(filefullpath, sheet, row_name)
+                        row_name = "公司资料简介"
+                        df_to_sql_T_1(filefullpath, sheet, row_name)
                     if sheet == 2:
-                        pass
-                        #row_name = "基金简介"
-                        #df_to_sql_T_2(filefullpath, sheet, row_name)
+                        row_name = "基金简介"
+                        df_to_sql_T_2(filefullpath, sheet, row_name)
                     if sheet == 3:
-                        pass
-                        #row_name = "人员简介"
-                        #df_to_sql_T_3(filefullpath, sheet, row_name)
+                        row_name = "人员简介"
+                        df_to_sql_T_3(filefullpath, sheet, row_name)
                     if sheet == 4:
                         row_name = "基金简称"
                         df_to_sql_4(filefullpath, sheet, row_name)
